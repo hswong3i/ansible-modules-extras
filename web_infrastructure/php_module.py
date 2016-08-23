@@ -34,6 +34,14 @@ options:
         - indicate the desired state of the resource
      choices: ['present', 'absent']
      default: present
+   version:
+     description:
+        - indicate the version of php for enable/disable
+     default: ALL
+   sapi:
+     description:
+        - indicate the sapi of php for enable/disable
+     default: ALL
 
 requirements: ["phpenmod","phpdismod"]
 '''
@@ -44,6 +52,12 @@ EXAMPLES = '''
 
 # disables the PHP module "gd"
 - php_module: state=absent name=gd
+
+# enables the php module "gd" for php 7.0 only
+- php_module: state=present name=gd version=7.0
+
+# enables the php module "gd" for php fpm only
+- php_module: state=present name=gd sapi=fpm
 '''
 
 RETURN = '''
@@ -64,34 +78,40 @@ def _check_module(module):
 def _enable_module(module):
     name = module.params['name']
     state = module.params['state']
+    version = module.params['version']
+    sapi = module.params['sapi']
     
     current_state = _check_module(module)
 
-    result, stdout, stderr = module.run_command("%s %s" % (module.get_bin_path('phpenmod'), name))
+    result, stdout, stderr = module.run_command("%s -v %s -s %s %s" % (module.get_bin_path('phpenmod'), version, sapi, name))
     
     if result != 0:
-        module.fail_json(msg="Failed to enable %s: %s" % (name, stdout))
+        module.fail_json(msg = "Failed to enable %s: %s" % (name, stdout))
     else:
         module.exit_json(changed = (current_state != state), result = "%s %s" % (name, state))
 
 def _disable_module(module):
     name = module.params['name']
     state = module.params['state']
+    version = module.params['version']
+    sapi = module.params['sapi']
     
     current_state = _check_module(module)
     
-    result, stdout, stderr = module.run_command("%s %s" % (module.get_bin_path('phpdismod'), name))
+    result, stdout, stderr = module.run_command("%s -v %s -s %s %s" % (module.get_bin_path('phpdismod'), version, sapi, name))
     
     if result != 0:
-        module.fail_json(msg="Failed to disable %s: %s" % (name, stdout))
+        module.fail_json(msg = "Failed to disable %s: %s" % (name, stdout))
     else:
         module.exit_json(changed = (current_state != state), result = "%s %s" % (name, state))
 
 def main():
     module = AnsibleModule(
         argument_spec = dict(
-            name  = dict(required=True),
-            state = dict(default='present', choices=['absent', 'present'])
+            name  = dict(required = True),
+            state = dict(default = 'present', choices = ['absent', 'present']),
+            version = dict(required = False, default = 'ALL'),
+            sapi = dict(required = False, default = 'ALL'),
         ),
         supports_check_mode = True,
     )
@@ -104,10 +124,10 @@ def main():
     if module.check_mode:
         module.exit_json(changed = (_check_module(module) != module.params['state']))
 
-    if module.params['state']  == 'present':
+    if module.params['state'] == 'present':
         _enable_module(module)
     
-    if module.params['state']  == 'absent':
+    if module.params['state'] == 'absent':
         _disable_module(module)
 
 # import module snippets
